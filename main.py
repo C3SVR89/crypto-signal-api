@@ -12,10 +12,15 @@ def root():
     return {"message": "Crypto Signal API is running."}
 
 @app.get("/signal")
-def get_signal(pair: str = "BTC/USDT", currency: str = "USD"):
+def get_signal(
+    pair: str = "BTC/USDT",
+    currency: str = "USD",
+    risk_pct: float = 2.0,
+    timeframe: str = "15m"
+):
     try:
         exchange = ccxt.binance()
-        ohlcv = exchange.fetch_ohlcv(pair, timeframe='15m', limit=100)
+        ohlcv = exchange.fetch_ohlcv(pair, timeframe=timeframe, limit=100)
         closes = [x[4] for x in ohlcv]
         df = pd.DataFrame(closes, columns=["close"])
 
@@ -29,12 +34,11 @@ def get_signal(pair: str = "BTC/USDT", currency: str = "USD"):
         # Signal Logic
         bullish = ema_fast.iloc[-1] > ema_slow.iloc[-1] and rsi.iloc[-1] < 70
         bearish = ema_fast.iloc[-1] < ema_slow.iloc[-1] and rsi.iloc[-1] > 30
-
         trend = "bullish" if bullish else "bearish" if bearish else "neutral"
 
         entry = round(current_price, 2)
-        stop_loss = round(entry * 0.98, 2)
-        take_profit = round(entry * 1.04, 2)
+        stop_loss = round(entry * (1 - risk_pct / 100), 2)
+        take_profit = round(entry * (1 + (risk_pct * 2) / 100), 2)
 
         return {
             "pair": pair,
@@ -45,7 +49,9 @@ def get_signal(pair: str = "BTC/USDT", currency: str = "USD"):
             "trend": trend,
             "rsi": round(rsi.iloc[-1], 2),
             "ema_fast": round(ema_fast.iloc[-1], 2),
-            "ema_slow": round(ema_slow.iloc[-1], 2)
+            "ema_slow": round(ema_slow.iloc[-1], 2),
+            "timeframe": timeframe,
+            "risk_pct": risk_pct
         }
 
     except Exception as e:
